@@ -747,5 +747,19 @@ async function importBackup(file) {
   L.site().catch(() => {}); // já busca a tabela de aulas
   window.addEventListener('hashchange', route);
   route();
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+      // בודק עדכונים גם כשחוזרים לאפליקציה שהייתה פתוחה ברקע
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    }).catch(() => {});
+    // גרסה חדשה נכנסה לפעולה: טוענים מחדש פעם אחת (לא באמצע לימוד ברכב או הקלטה)
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloaded) return;
+      if (/^#\/(car|record|review)\//.test(location.hash)) return;
+      reloaded = true;
+      location.reload();
+    });
+  }
 })();
