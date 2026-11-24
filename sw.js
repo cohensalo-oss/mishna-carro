@@ -1,5 +1,5 @@
 // Guarda o app para abrir sem internet. Texto e aulas vêm da rede (o texto fica salvo no app).
-const CACHE = 'mishna-carro-v2';
+const CACHE = 'mishna-carro-v3';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'db.js', 'text.js', 'audio.js', 'shinun.js', 'lesson.js', 'data.js',
   'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 

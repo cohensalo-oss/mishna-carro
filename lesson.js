@@ -11,7 +11,7 @@ let siteP = null;
 
 function parseSite(html) {
   const a = html.indexOf('const SEDARIM = ');
-  if (a < 0) throw new Error('formato do site mudou');
+  if (a < 0) throw new Error('מבנה האתר השתנה');
   const b = html.indexOf(';\n', a);
   const sedarim = JSON.parse(html.slice(a + 16, b));
   const k = html.match(/DRIVE_KEY\s*=\s*['"]([^'"]+)['"]/);
@@ -33,7 +33,7 @@ export function site() {
     } catch (e) {
       if (cached) return cached;
       siteP = null;
-      throw new Error('Não consegui carregar as aulas (' + e.message + ')');
+      throw new Error('לא הצלחתי לטעון את השיעורים (' + e.message + ')');
     }
   })();
 }
@@ -113,7 +113,7 @@ function once(el, ev, ms) {
   return new Promise((res, rej) => {
     const t = setTimeout(() => { off(); rej(new Error('timeout')); }, ms);
     const ok = () => { off(); res(); };
-    const bad = () => { off(); rej(new Error('Não consegui carregar o áudio da aula')); };
+    const bad = () => { off(); rej(new Error('לא הצלחתי לטעון את השמע של השיעור')); };
     const off = () => { clearTimeout(t); el.removeEventListener(ev, ok); el.removeEventListener('error', bad); };
     el.addEventListener(ev, ok);
     el.addEventListener('error', bad);

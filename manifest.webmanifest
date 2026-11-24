@@ -1,8 +1,9 @@
 {
-  "name": "Mishna no Carro",
-  "short_name": "Mishna",
-  "description": "Sua leitura da Mishna, שינון e a aula do podcast משנה יומית",
-  "lang": "pt-BR",
+  "name": "משנה בדרך",
+  "short_name": "משנה בדרך",
+  "description": "הקריאה שלך, שינון, והשיעור של משנה יומית",
+  "lang": "he",
+  "dir": "rtl",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -7,10 +7,10 @@ export async function chapterText(tr, ch) {
   if (cached) return cached;
   const url = `https://www.sefaria.org/api/v3/texts/${encodeURIComponent(tr.id)}.${ch}?version=hebrew`;
   const r = await fetch(url);
-  if (!r.ok) throw new Error('Não consegui baixar o texto da Sefaria (' + r.status + ')');
+  if (!r.ok) throw new Error('לא הצלחתי להוריד את הטקסט מספריא (' + r.status + ')');
   const j = await r.json();
   const v = (j.versions || [])[0];
-  if (!v || !Array.isArray(v.text)) throw new Error('Texto não encontrado na Sefaria');
+  if (!v || !Array.isArray(v.text)) throw new Error('הטקסט לא נמצא בספריא');
   const text = v.text.map(s => String(s).replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim());
   await db.put('texts', key, text);
   return text;

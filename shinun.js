@@ -8,7 +8,7 @@ export const speechSupported = !!SR;
 // onText(texto) é chamado a cada atualização. Lança erro se o microfone for negado.
 export function listen({ maxMs = 60000, silenceMs = 2200, startMs = 9000, signal, onText } = {}) {
   return new Promise((resolve, reject) => {
-    if (!SR) return reject(new Error('Reconhecimento de voz não disponível neste navegador'));
+    if (!SR) return reject(new Error('אין זיהוי דיבור בדפדפן הזה'));
     const prev = [];
     let finals = [], interim = '', done = false, rec, lastAct = 0;
     const started = Date.now();
@@ -45,7 +45,7 @@ export function listen({ maxMs = 60000, silenceMs = 2200, startMs = 9000, signal
       };
       rec.onerror = e => {
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          finish(new Error('O microfone/reconhecimento de voz foi bloqueado. Permita o microfone para este site.'));
+          finish(new Error('המיקרופון או זיהוי הדיבור חסומים. אשרו גישה למיקרופון לאתר הזה.'));
         }
       };
       rec.onend = () => {

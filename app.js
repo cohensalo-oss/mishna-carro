@@ -51,14 +51,14 @@ async function route() {
     await (views[view] || home)(...args);
   } catch (e) {
     console.error(e);
-    app.innerHTML = `<div class="top"><button class="back" onclick="history.back()">‹</button><h1>Erro</h1></div>
+    app.innerHTML = `<div class="top"><button class="back" onclick="history.back()">›</button><h1>שגיאה</h1></div>
       <div class="card warn"><p>${esc(e.message || e)}</p></div>`;
   }
   window.scrollTo(0, 0);
 }
 
 function header(text, back = '#/') {
-  return `<div class="top"><button class="back" data-href="${back}" aria-label="Voltar">‹</button><h1>${text}</h1></div>`;
+  return `<div class="top"><button class="back" data-href="${back}" aria-label="חזרה">›</button><h1>${text}</h1></div>`;
 }
 
 app.addEventListener('click', e => {
@@ -70,14 +70,14 @@ app.addEventListener('click', e => {
 async function home() {
   const chapters = await db.chapterList();
   app.innerHTML = `
-    <h1 style="margin-top:18px">Mishna no Carro</h1>
-    <p class="muted">Sua leitura, <bdi>שינון</bdi> e a aula do podcast <bdi>משנה יומית</bdi>.</p>
+    <h1 style="margin-top:18px">משנה בדרך</h1>
+    <p class="muted">הקריאה שלך, שינון, והשיעור של משנה יומית.</p>
     <div class="home-cards">
-      <button class="home-card main" data-href="#/study"><b>🚗 Estudar no carro</b><span>${chapters.length ? chapters.length + ' capítulo(s) gravado(s)' : 'Grave um capítulo primeiro'}</span></button>
-      <button class="home-card" data-href="#/upload"><b>🎙️ Gravar / enviar capítulo</b><span>Leia um perek; o app separa em mishnaiot</span></button>
-      <button class="home-card" data-href="#/settings"><b>⚙️ Configurações</b><span>Repetições, שינון, backup</span></button>
+      <button class="home-card main" data-href="#/study"><b>🚗 לימוד ברכב</b><span>${chapters.length ? (chapters.length === 1 ? 'פרק אחד מוקלט' : chapters.length + ' פרקים מוקלטים') : 'קודם מקליטים פרק'}</span></button>
+      <button class="home-card" data-href="#/upload"><b>🎙️ הקלטת פרק</b><span>קוראים פרק, והאפליקציה מחלקת אותו למשניות</span></button>
+      <button class="home-card" data-href="#/settings"><b>⚙️ הגדרות</b><span>חזרות, שינון, גיבוי</span></button>
     </div>
-    ${speechSupported ? '' : '<div class="card warn small">Este navegador não tem reconhecimento de voz, então o שינון fica desligado. No Android, use o Chrome.</div>'}`;
+    ${speechSupported ? '' : '<div class="card warn small">בדפדפן הזה אין זיהוי דיבור, ולכן השינון כבוי. באנדרואיד פתחו את האפליקציה ב־Chrome.</div>'}`;
 }
 
 // ---------------- escolher capítulo para gravar ----------------
@@ -92,27 +92,27 @@ function tractateOptions(sel) {
 
 async function upload() {
   const last = (await db.get('kv', 'lastUpload')) || { tid: 'Mishnah_Berakhot', ch: 1 };
-  app.innerHTML = `${header('Gravar capítulo')}
-    <label class="field"><span>Masechet</span><select id="tr">${tractateOptions(last.tid)}</select></label>
-    <label class="field"><span>Perek</span><select id="ch"></select></label>
+  app.innerHTML = `${header('הקלטת פרק')}
+    <label class="field"><span>מסכת</span><select id="tr">${tractateOptions(last.tid)}</select></label>
+    <label class="field"><span>פרק</span><select id="ch"></select></label>
     <div id="info" class="muted small"></div>
     <div class="spacer"></div>
-    <button class="big primary" id="rec">🎙️ Gravar agora</button>
+    <button class="big primary" id="rec">🎙️ הקלטה עכשיו</button>
     <div class="spacer"></div>
-    <button class="big" id="file">📁 Enviar arquivo de áudio</button>
+    <button class="big" id="file">📁 העלאת קובץ שמע</button>
     <input type="file" id="fileIn" accept="audio/*,.m4a,.mp3,.aac,.wav,.ogg,.opus,.webm" hidden>
-    <p class="muted small">Gravando aqui, você toca em “Próxima mishna” ao começar cada uma: o corte fica exato.
-      Enviando um arquivo, o app procura as pausas entre as mishnaiot e você pode ajustar depois.</p>`;
+    <p class="muted small">בהקלטה כאן לוחצים "המשנה הבאה" כשמתחילים כל משנה, והחיתוך מדויק.
+      בהעלאת קובץ האפליקציה מחפשת את ההפסקות בין המשניות, ואפשר לתקן אחר כך.</p>`;
   const trSel = $('#tr'), chSel = $('#ch');
   const fillCh = async keep => {
     const tr = byId[trSel.value];
-    chSel.innerHTML = tr.ch.map((n, i) => `<option value="${i + 1}">פרק ${gem(i + 1)} · ${n} mishnaiot</option>`).join('');
+    chSel.innerHTML = tr.ch.map((n, i) => `<option value="${i + 1}">פרק ${gem(i + 1)} · ${n} משניות</option>`).join('');
     if (keep) chSel.value = String(Math.min(keep, tr.ch.length));
     await info();
   };
   const info = async () => {
     const have = await db.get('chapters', chKey(trSel.value, chSel.value));
-    $('#info').textContent = have ? '⚠️ Este perek já está gravado. Uma nova gravação substitui a anterior.' : '';
+    $('#info').textContent = have ? '⚠️ הפרק הזה כבר מוקלט. הקלטה חדשה תחליף את הקודמת.' : '';
   };
   trSel.onchange = () => fillCh(1);
   chSel.onchange = info;
@@ -135,24 +135,24 @@ let pendingUpload = null;
 // ---------------- gravar no app ----------------
 async function record(tid, ch) {
   const tr = byId[tid]; ch = +ch;
-  app.innerHTML = `${header(title(tr, ch), '#/upload')}<p class="muted">Baixando o texto…</p>`;
+  app.innerHTML = `${header(title(tr, ch), '#/upload')}<p class="muted">טוען את הטקסט…</p>`;
   const text = await chapterText(tr, ch);
   let cur = 0, rec = null, marks = [], tick;
   const draw = () => {
     const recording = !!rec;
     app.innerHTML = `${header(title(tr, ch), '#/upload')}
       <div class="row"><span class="timer" id="timer">${recording ? '<span class="rec-dot"></span> ' : ''}${fmt(rec ? rec.elapsed() : 0)}</span>
-        <span class="grow"></span><span class="muted">Mishna ${cur + 1} de ${text.length}</span></div>
+        <span class="grow"></span><span class="muted">משנה ${cur + 1} מתוך ${text.length}</span></div>
       <div class="prompter"><div class="label">משנה ${gem(cur + 1)}</div><div class="he">${esc(text[cur])}</div></div>
-      ${cur + 1 < text.length ? `<div class="prompter next"><div class="label">a seguir: משנה ${gem(cur + 2)}</div><div class="he">${esc(text[cur + 1])}</div></div>` : ''}
+      ${cur + 1 < text.length ? `<div class="prompter next"><div class="label">הבאה: משנה ${gem(cur + 2)}</div><div class="he">${esc(text[cur + 1])}</div></div>` : ''}
       <div style="position:sticky;bottom:12px;display:grid;gap:10px">
-      ${!recording ? `<button class="huge primary" id="start">🎙️ Começar a gravar</button>
-        <p class="muted small center">Comece lendo a mishna א. Ao terminar cada mishna, toque em “Próxima”.</p>` : `
-        <button class="huge primary" id="next">${cur + 1 < text.length ? 'Próxima mishna ›' : '✓ Terminar'}</button>
+      ${!recording ? `<button class="huge primary" id="start">🎙️ התחלת הקלטה</button>
+        <p class="muted small center">מתחילים לקרוא את משנה א. בסוף כל משנה לוחצים "הבאה".</p>` : `
+        <button class="huge primary" id="next">${cur + 1 < text.length ? 'המשנה הבאה ‹' : '✓ סיום'}</button>
         <div class="controls">
-          <button id="undo" ${cur === 0 ? 'disabled' : ''}>↶<small>voltar</small></button>
-          <button id="pause">${rec.paused() ? '▶' : '⏸'}<small>${rec.paused() ? 'continuar' : 'pausar'}</small></button>
-          <button id="stop" class="danger">✕<small>cancelar</small></button>
+          <button id="undo" ${cur === 0 ? 'disabled' : ''}>↶<small>אחורה</small></button>
+          <button id="pause">${rec.paused() ? '▶' : '⏸'}<small>${rec.paused() ? 'המשך' : 'השהיה'}</small></button>
+          <button id="stop" class="danger">✕<small>ביטול</small></button>
         </div>`}
       </div>`;
     $('#start')?.addEventListener('click', start);
@@ -160,7 +160,7 @@ async function record(tid, ch) {
     $('#undo')?.addEventListener('click', () => { marks.pop(); cur--; draw(); });
     $('#pause')?.addEventListener('click', () => { rec.paused() ? rec.resume() : rec.pause(); draw(); });
     $('#stop')?.addEventListener('click', async () => {
-      if (!confirm('Descartar esta gravação?')) return;
+      if (!confirm('למחוק את ההקלטה הזאת?')) return;
       await rec.stop(); rec = null; go('#/upload');
     });
   };
@@ -169,7 +169,7 @@ async function record(tid, ch) {
       A.ac();
       rec = await A.startRecorder();
     } catch (e) {
-      toast('Não consegui acessar o microfone: ' + e.message, 5000);
+      toast('אין גישה למיקרופון: ' + e.message, 5000);
       return;
     }
     await wake(true);
@@ -198,7 +198,7 @@ async function record(tid, ch) {
 async function review(tid, ch, mode) {
   const tr = byId[tid]; ch = +ch;
   const back = mode === 'new' ? '#/upload' : `#/chapter/${tid}/${ch}`;
-  app.innerHTML = `${header('Ajustar cortes · ' + title(tr, ch), back)}<p class="muted">Preparando o áudio…</p>`;
+  app.innerHTML = `${header('כיוון חיתוכים · ' + title(tr, ch), back)}<p class="muted">מכין את השמע…</p>`;
   const text = await chapterText(tr, ch);
   let blob, cuts, isNew = mode === 'new';
   if (isNew) {
@@ -211,7 +211,7 @@ async function review(tid, ch, mode) {
     cuts = rec.cuts;
   }
   let buf;
-  try { buf = await A.decode(blob); } catch (e) { throw new Error('Não consegui ler este áudio. Tente MP3 ou M4A. (' + e.message + ')'); }
+  try { buf = await A.decode(blob); } catch (e) { throw new Error('לא הצלחתי לקרוא את קובץ השמע. נסו MP3 או M4A. (' + e.message + ')'); }
   if (isNew) {
     if (pendingUpload.source === 'rec') {
       const m = pendingUpload.marks.slice();
@@ -232,8 +232,8 @@ async function review(tid, ch, mode) {
   };
   onLeave(stopPlay);
   const draw = () => {
-    app.innerHTML = `${header('Ajustar cortes · ' + title(tr, ch), back)}
-      <p class="muted small">${isNew && pendingUpload.source === 'file' ? 'Os cortes foram estimados pelas pausas da leitura. ' : ''}Toque ▶ para ouvir cada mishna. Se o início estiver errado, ajuste com os botões e ouça de novo (“▶ início” toca só os primeiros segundos).</p>
+    app.innerHTML = `${header('כיוון חיתוכים · ' + title(tr, ch), back)}
+      <p class="muted small">${isNew && pendingUpload.source === 'file' ? 'החיתוכים נקבעו לפי ההפסקות בקריאה. ' : ''}לחצו ▶ כדי לשמוע כל משנה. אם ההתחלה לא במקום, תקנו בכפתורים ושמעו שוב ("▶ התחלה" משמיע רק את השניות הראשונות).</p>
       ${text.map((t, i) => `
         <div class="cut">
           <div class="row"><b class="he" style="font-size:22px;color:var(--accent)">משנה ${gem(i + 1)}</b><span class="grow"></span>
@@ -241,12 +241,12 @@ async function review(tid, ch, mode) {
             <button data-play="${i}">▶</button></div>
           <div class="he">${esc(t)}</div>
           ${i > 0 ? `<div class="nudge">
-            <button data-n="${i}" data-d="-1">−1s</button><button data-n="${i}" data-d="-0.25">−¼s</button>
-            <button data-n="${i}" data-d="0.25">+¼s</button><button data-n="${i}" data-d="1">+1s</button>
-          </div><div class="row" style="margin-top:6px"><button class="ghost small" data-head="${i}">▶ início</button></div>` : ''}
+            <button data-n="${i}" data-d="-1">−1 שנ׳</button><button data-n="${i}" data-d="-0.25">−¼ שנ׳</button>
+            <button data-n="${i}" data-d="0.25">+¼ שנ׳</button><button data-n="${i}" data-d="1">+1 שנ׳</button>
+          </div><div class="row" style="margin-top:6px"><button class="ghost small" data-head="${i}">▶ התחלה</button></div>` : ''}
         </div>`).join('')}
       <div class="spacer"></div>
-      <button class="big primary" id="save">✓ Salvar capítulo</button>`;
+      <button class="big primary" id="save">✓ שמירת הפרק</button>`;
     $$('[data-play]').forEach(b => b.onclick = () => { const i = +b.dataset.play; play(cuts[i], cuts[i + 1]); });
     $$('[data-head]').forEach(b => b.onclick = () => { const i = +b.dataset.head; play(cuts[i], cuts[i] + 3); });
     $$('[data-n]').forEach(b => b.onclick = () => {
@@ -263,7 +263,7 @@ async function review(tid, ch, mode) {
       });
       navigator.storage?.persist?.();
       pendingUpload = null;
-      toast('Capítulo salvo ✓');
+      toast('הפרק נשמר ✓');
       go(`#/chapter/${tid}/${ch}`);
     };
   };
@@ -277,13 +277,13 @@ async function study() {
   chapters.sort((a, b) => order[a.tid] - order[b.tid] || a.ch - b.ch);
   const groups = {};
   for (const c of chapters) (groups[c.tid] ||= []).push(c);
-  app.innerHTML = `${header('Estudar')}
-    ${chapters.length ? '' : '<div class="card"><p>Nenhum capítulo gravado ainda.</p><button class="primary" data-href="#/upload">🎙️ Gravar o primeiro</button></div>'}
+  app.innerHTML = `${header('לימוד')}
+    ${chapters.length ? '' : '<div class="card"><p>עוד לא הוקלט אף פרק.</p><button class="primary" data-href="#/upload">🎙️ הקלטת הפרק הראשון</button></div>'}
     ${Object.entries(groups).map(([tid, list]) => `
       <h2 class="he" style="text-align:start">${esc(byId[tid].he)}</h2>
       <div class="list">${list.map(c => `
         <button class="item" data-href="#/chapter/${tid}/${c.ch}">
-          <span class="num">${gem(c.ch)}</span><span class="grow">פרק ${gem(c.ch)}</span><span class="chip">${c.n} mishnaiot</span>
+          <span class="num">${gem(c.ch)}</span><span class="grow">פרק ${gem(c.ch)}</span><span class="chip">${c.n} משניות</span>
         </button>`).join('')}</div>`).join('')}`;
 }
 
@@ -301,21 +301,21 @@ async function chapter(tid, ch) {
       return { ...l, exact: marks[ch + ':' + (i + 1)] != null };
     }));
   } catch (e) { lessonErr = e.message; }
-  const lessonInfo = i => { const l = lessons[i]; return l ? `aula ${l.n}${l.exact ? ' ✓' : ''}` : ''; };
+  const lessonInfo = i => { const l = lessons[i]; return l ? `שיעור ${l.n}${l.exact ? ' ✓' : ''}` : ''; };
   app.innerHTML = `${header(title(tr, ch), '#/study')}
-    <button class="huge primary" data-href="#/car/${tid}/${ch}/1">🚗 Começar do início</button>
-    <h2>Escolha a mishna</h2>
+    <button class="huge primary" data-href="#/car/${tid}/${ch}/1">🚗 מתחילים מההתחלה</button>
+    <h2>בחירת משנה</h2>
     <div class="mgrid">${rec.cuts.slice(0, -1).map((_, i) => `
       <button data-href="#/car/${tid}/${ch}/${i + 1}">${gem(i + 1)}<small>${lessonInfo(i)}</small></button>`).join('')}</div>
     <div class="spacer"></div>
-    ${lessonErr ? `<p class="muted small">${esc(lessonErr)}</p>` : lessons.some(Boolean) ? '' : '<p class="muted small">Não encontrei as aulas deste perek no site משנה יומית: o modo carro faz só a leitura e o שינון.</p>'}
+    ${lessonErr ? `<p class="muted small">${esc(lessonErr)}</p>` : lessons.some(Boolean) ? '' : '<p class="muted small">לא מצאתי באתר משנה יומית שיעורים לפרק הזה, ולכן ברכב יהיו רק הקריאה והשינון.</p>'}
     <div class="row">
-      <button data-href="#/review/${tid}/${ch}/edit">✂️ Ajustar cortes</button>
-      <button data-href="#/record/${tid}/${ch}">🎙️ Regravar</button>
-      <button class="danger" id="del">🗑 Apagar</button>
+      <button data-href="#/review/${tid}/${ch}/edit">✂️ כיוון חיתוכים</button>
+      <button data-href="#/record/${tid}/${ch}">🎙️ הקלטה מחדש</button>
+      <button class="danger" id="del">🗑 מחיקה</button>
     </div>`;
   $('#del').onclick = async () => {
-    if (!confirm(`Apagar a gravação de ${title(tr, ch)}? Não dá para desfazer.`)) return;
+    if (!confirm(`למחוק את ההקלטה של ${title(tr, ch)}? אי אפשר לבטל את זה.`)) return;
     await db.del('chapters', chKey(tid, ch));
     go('#/study');
   };
@@ -345,18 +345,18 @@ async function car(tid, ch, m) {
   let skipTo = null;            // 'repeat' | 'next' | 'prev'
 
   app.innerHTML = `<div class="car">
-    <div class="top"><button class="back" id="exit" aria-label="Sair">‹</button><h1 id="ttl" class="he" style="text-align:start"></h1>
-      <button class="ghost small" id="adj" title="Ajustar a aula">🎧 ajustar</button></div>
+    <div class="top"><button class="back" id="exit" aria-label="יציאה">›</button><h1 id="ttl" class="he" style="text-align:start"></h1>
+      <button class="ghost small" id="adj" title="כיוון השיעור">🎧 כיוון</button></div>
     <div class="progress"><div id="prog"></div></div>
     <div class="stage" id="stage">…</div>
     <div class="mtext" id="mtext"></div>
     <div class="heard" id="heard"></div>
     <div class="controls car-controls">
-      <button id="bPrev">⏮<small>mishna anterior</small></button>
-      <button id="bPause">⏸<small>pausar</small></button>
-      <button id="bSkip">⏭<small>pular etapa</small></button>
+      <button id="bPrev">⏮<small>משנה קודמת</small></button>
+      <button id="bPause">⏸<small>השהיה</small></button>
+      <button id="bSkip">⏭<small>דילוג על שלב</small></button>
     </div>
-    <button class="big" id="bNext">Próxima mishna ›</button>
+    <button class="big" id="bNext">המשנה הבאה ‹</button>
   </div>`;
   const stageEl = $('#stage'), textEl = $('#mtext'), heardEl = $('#heard'), prog = $('#prog');
   const setStage = (cls, msg) => { stageEl.className = 'stage ' + cls; stageEl.textContent = msg; };
@@ -375,7 +375,7 @@ async function car(tid, ch, m) {
   const newStage = () => { stageCtl = new AbortController(); return stageCtl.signal; };
   const setPaused = p => {
     paused = p;
-    $('#bPause').innerHTML = p ? '▶<small>continuar</small>' : '⏸<small>pausar</small>';
+    $('#bPause').innerHTML = p ? '▶<small>המשך</small>' : '⏸<small>השהיה</small>';
     if (p) { A.ac().suspend(); L.pause(); stageCtl?.abort('pause'); }
     else { A.ac().resume(); resumeWait?.(); }
   };
@@ -421,13 +421,13 @@ async function car(tid, ch, m) {
       if (sessionOver || skipTo) return;
       let signal = newStage();
       if (playFirst && attempt === 1) {
-        setStage('listen', `Ouça: ${label}`);
+        setStage('listen', `הקשיבו: ${label}`);
         paint([w0, w1]);
         await playWords(seg, w0, w1, signal);
         if (signal.aborted) { if (signal.reason === 'pause') { attempt--; continue; } if (signal.reason === 'skip') return; return; }
         await A.sleep(400, signal);
       }
-      setStage('turn', `Sua vez: repita ${label}${attempt > 1 ? ` (tentativa ${attempt})` : ''}`);
+      setStage('turn', `תורכם: חזרו על ${label}${attempt > 1 ? ` (ניסיון ${attempt})` : ''}`);
       paint([w0, w1]);
       heardEl.textContent = '';
       await A.cue('turn');
@@ -449,17 +449,17 @@ async function car(tid, ch, m) {
       paint(null, okArr);
       const pct = Math.round(res.score * 100);
       if (!heard) {
-        setStage('wrong', 'Não ouvi nada. Vamos de novo.');
+        setStage('wrong', 'לא שמעתי כלום. עוד פעם.');
         await A.cue('bad');
         continue;
       }
       if (pct >= settings.threshold && !res.serious) {
-        setStage('good', `Muito bem! ${pct}%`);
+        setStage('good', `יפה מאוד! ${pct}%`);
         await A.cue('ok');
         await A.sleep(900, signal);
         return true;
       }
-      setStage('wrong', `${pct}%${res.serious ? ' · faltou ou trocou algo importante' : ''}. Ouça a correção`);
+      setStage('wrong', `${pct}%${res.serious ? ' · חסר או הוחלף משהו חשוב' : ''}. הקשיבו לתיקון`);
       await A.cue('bad');
       const miss = w0 + Math.max(0, res.firstMiss);
       const [p0, p1] = phraseAround(tokens, miss);
@@ -472,7 +472,7 @@ async function car(tid, ch, m) {
     // não chegou lá: ouve mais uma vez e segue
     if (sessionOver || skipTo) return;
     const signal = newStage();
-    setStage('listen', `Mais uma vez: ${label}`);
+    setStage('listen', `עוד פעם: ${label}`);
     paint([w0, w1]);
     await playWords(seg, w0, w1, signal);
     return false;
@@ -491,7 +491,7 @@ async function car(tid, ch, m) {
   async function lessonStage(from = null) {
     let s;
     try {
-      setStage('lesson', 'Carregando a aula…');
+      setStage('lesson', 'טוען את השיעור…');
       s = await lessonSegment(pos.ch, pos.m);
     } catch (e) {
       setStage('wrong', e.message);
@@ -499,18 +499,18 @@ async function car(tid, ch, m) {
       return;
     }
     if (!s) {
-      setStage('lesson', 'Não há aula desta mishna no site');
+      setStage('lesson', 'אין באתר שיעור על המשנה הזאת');
       await A.sleep(1500);
       return;
     }
     const signal = newStage();
-    const label = `Aula ${s.lesson.n} · ${s.lesson.members.length > 1 ? `mishna ${s.lesson.index + 1} de ${s.lesson.members.length}` : ''}${s.exact ? '' : ' (início estimado)'}`;
+    const label = `שיעור ${s.lesson.n}${s.lesson.members.length > 1 ? ` · משנה ${s.lesson.index + 1} מתוך ${s.lesson.members.length}` : ''}${s.exact ? '' : ' (התחלה משוערת)'}`;
     setStage('lesson', label);
     paint(null);
     await L.playSegment(s.lesson.url, from ?? s.start, s.end, {
       signal,
       onBlocked: () => {
-        setStage('lesson', '▶ Toque aqui para tocar a aula');
+        setStage('lesson', '▶ לחצו כאן כדי להשמיע את השיעור');
         stageEl.onclick = () => { stageEl.onclick = null; L.audio.play(); setStage('lesson', label); };
       },
     });
@@ -535,7 +535,7 @@ async function car(tid, ch, m) {
       await waitIfPaused();
       if (sessionOver || skipTo) return;
       const signal = newStage();
-      setStage('listen', `Ouvindo ${i} de ${settings.repeats}`);
+      setStage('listen', `השמעה ${i} מתוך ${settings.repeats}`);
       paint([0, tokens.length]);
       await A.playRange(buf, seg[0], seg[1], signal);
       if (signal.aborted) { if (signal.reason === 'pause') { i--; continue; } if (signal.reason === 'skip') break; return; }
@@ -545,10 +545,10 @@ async function car(tid, ch, m) {
     if (settings.shinun && speechSupported) {
       const parts = settings.parts && tokens.length > 22 ? splitParts(tokens) : [];
       for (let k = 0; k < parts.length; k++) {
-        await drill(seg, parts[k], `parte ${k + 1} de ${parts.length}`, true);
+        await drill(seg, parts[k], `חלק ${k + 1} מתוך ${parts.length}`, true);
         if (sessionOver || skipTo) return;
       }
-      await drill(seg, [0, tokens.length], 'a mishna inteira', false);
+      await drill(seg, [0, tokens.length], 'המשנה כולה', false);
       if (sessionOver || skipTo) return;
     }
     // 3) aula
@@ -584,7 +584,7 @@ async function car(tid, ch, m) {
   }
   function updateMediaSession() {
     if ('mediaSession' in navigator && window.MediaMetadata) {
-      navigator.mediaSession.metadata = new MediaMetadata({ title: title(tr, pos.ch, pos.m), artist: 'Mishna no Carro' });
+      navigator.mediaSession.metadata = new MediaMetadata({ title: title(tr, pos.ch, pos.m), artist: 'משנה בדרך' });
     }
   }
 
@@ -592,26 +592,26 @@ async function car(tid, ch, m) {
   async function openCalibration() {
     setPaused(true);
     showDock(true);
-    dockExtra.innerHTML = '<div class="card" style="margin:0">Carregando a aula…</div>';
+    dockExtra.innerHTML = '<div class="card" style="margin:0">טוען את השיעור…</div>';
     let s;
     try { s = await lessonSegment(pos.ch, pos.m); } catch (e) { s = null; toast(e.message, 5000); }
-    if (!s) { dockExtra.innerHTML = ''; showDock(false); toast('Não há aula desta mishna no site'); return; }
+    if (!s) { dockExtra.innerHTML = ''; showDock(false); toast('אין באתר שיעור על המשנה הזאת'); return; }
     const au = L.audio;
     const close = () => { clearInterval(iv); au.pause(); dockExtra.innerHTML = ''; showDock(false); };
     const draw = () => {
       dockExtra.innerHTML = `<div class="card" style="margin:0">
-        <div class="row"><b class="grow">Aula ${s.lesson.n} · ${esc(title(tr, pos.ch, pos.m))}</b><button class="ghost" id="cClose">✕</button></div>
-        <p class="small muted">A aula cobre ${s.lesson.members.map(([c, i]) => esc(title(tr, c, i))).join(', ')}.
-          Esta mishna começa em ${fmt(s.start)}${s.exact ? ' (marcado ✓)' : ' (estimado)'}. Ouça e toque 📍 quando o rav começar esta mishna.</p>
-        <div class="row"><span class="timer" id="cPos">${fmt(au.currentTime)} / ${fmt(s.dur)}</span></div>
+        <div class="row"><b class="grow">שיעור ${s.lesson.n} · ${esc(title(tr, pos.ch, pos.m))}</b><button class="ghost" id="cClose">✕</button></div>
+        <p class="small muted">השיעור עוסק ב־${s.lesson.members.map(([c, i]) => esc(title(tr, c, i))).join(', ')}.
+          המשנה הזאת מתחילה ב־<bdi>${fmt(s.start)}</bdi>${s.exact ? ' (סומן ✓)' : ' (משוער)'}. הקשיבו ולחצו 📍 כשהרב מתחיל את המשנה הזאת.</p>
+        <div class="row"><span class="timer" id="cPos" dir="ltr">${fmt(au.currentTime)} / ${fmt(s.dur)}</span></div>
         <div class="controls" style="margin:8px 0">
-          <button id="cBack">−10<small>seg</small></button>
-          <button id="cPlay">${au.paused ? '▶' : '⏸'}<small>${au.paused ? 'tocar' : 'pausar'}</small></button>
-          <button id="cFwd">+10<small>seg</small></button>
+          <button id="cBack">−10<small>שניות</small></button>
+          <button id="cPlay">${au.paused ? '▶' : '⏸'}<small>${au.paused ? 'השמעה' : 'השהיה'}</small></button>
+          <button id="cFwd">+10<small>שניות</small></button>
         </div>
         <div class="row">
-          <button class="primary grow" id="cMark">📍 Esta mishna começa agora</button>
-          ${s.exact ? '<button class="ghost" id="cUnmark">desfazer</button>' : ''}
+          <button class="primary grow" id="cMark">📍 המשנה מתחילה עכשיו</button>
+          ${s.exact ? '<button class="ghost" id="cUnmark">ביטול הסימון</button>' : ''}
         </div></div>`;
       const q = sel => dockExtra.querySelector(sel);
       q('#cClose').onclick = close;
@@ -629,7 +629,7 @@ async function car(tid, ch, m) {
         await L.setMarks(s.lesson.id, s.marks);
         s.start = au.currentTime;
         s.exact = true;
-        toast(`Marcado em ${fmt(au.currentTime)} ✓`);
+        toast(`סומן ב־${fmt(au.currentTime)} ✓`);
         draw();
       };
       q('#cUnmark')?.addEventListener('click', async () => {
@@ -655,10 +655,10 @@ async function car(tid, ch, m) {
     if (skipTo === 'prev') { await step(-1); continue; }
     if (skipTo === 'next' || settings.advance) {
       if (await step(1)) { await A.cue('next'); continue; }
-      setStage('good', 'Fim dos capítulos gravados. Parabéns!');
+      setStage('good', 'סיימתם את הפרקים המוקלטים. כל הכבוד!');
       break;
     }
-    setStage('good', 'Mishna concluída ✓ · ⏭ próxima · ⏸ repetir');
+    setStage('good', 'המשנה הסתיימה ✓ · ⏭ הבאה · ⏸ חזרה');
     // espera o usuário escolher
     const sig = newStage();
     await new Promise(r => sig.addEventListener('abort', r, { once: true }));
@@ -673,27 +673,27 @@ async function car(tid, ch, m) {
 async function settingsView() {
   const s = settings;
   const est = await navigator.storage?.estimate?.().catch(() => null);
-  app.innerHTML = `${header('Configurações')}
-    <label class="field"><span>Quantas vezes ouvir a sua leitura</span>
+  app.innerHTML = `${header('הגדרות')}
+    <label class="field"><span>כמה פעמים לשמוע את הקריאה שלך</span>
       <select id="repeats">${[1, 2, 3, 4, 5].map(n => `<option ${n === s.repeats ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-    <label class="switch"><span>שינון (repetir de cor)<small>O app escuta você repetir e corrige</small></span><input type="checkbox" id="shinun" ${s.shinun ? 'checked' : ''}></label>
-    <label class="switch"><span>Decorar por partes<small>Mishnaiot longas: primeiro cada frase, depois tudo</small></span><input type="checkbox" id="parts" ${s.parts ? 'checked' : ''}></label>
-    <label class="field"><span>Acerto mínimo para passar (%)</span>
+    <label class="switch"><span>שינון בעל פה<small>האפליקציה מקשיבה לחזרה שלך ומתקנת</small></span><input type="checkbox" id="shinun" ${s.shinun ? 'checked' : ''}></label>
+    <label class="switch"><span>שינון בחלקים<small>במשנה ארוכה: קודם כל קטע, ואחר כך הכול</small></span><input type="checkbox" id="parts" ${s.parts ? 'checked' : ''}></label>
+    <label class="field"><span>אחוז הצלחה מינימלי למעבר</span>
       <select id="threshold">${[50, 60, 70, 75, 80, 85, 90].map(n => `<option ${n === s.threshold ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-    <label class="field"><span>Tentativas no שינון</span>
+    <label class="field"><span>מספר ניסיונות בשינון</span>
       <select id="attempts">${[1, 2, 3, 4, 5, 6, 8].map(n => `<option ${n === s.attempts ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-    <label class="switch"><span>Aula do podcast<small>Toca a aula de משנה יומית depois</small></span><input type="checkbox" id="lesson" ${s.lesson ? 'checked' : ''}></label>
-    <label class="field"><span>Velocidade da aula</span>
+    <label class="switch"><span>שיעור משנה יומית<small>משמיע את השיעור אחרי השינון</small></span><input type="checkbox" id="lesson" ${s.lesson ? 'checked' : ''}></label>
+    <label class="field"><span>מהירות השיעור</span>
       <select id="lessonRate">${[1, 1.25, 1.5, 1.75, 2].map(n => `<option value="${n}" ${n === s.lessonRate ? 'selected' : ''}>×${n}</option>`).join('')}</select></label>
-    <label class="switch"><span>Continuar sozinho<small>Passa para a próxima mishna no fim</small></span><input type="checkbox" id="advance" ${s.advance ? 'checked' : ''}></label>
-    <h2>Testar o reconhecimento de voz</h2>
-    <button id="test">🎤 Falar uma frase</button>
+    <label class="switch"><span>המשך אוטומטי<small>בסוף עוברים לבד למשנה הבאה</small></span><input type="checkbox" id="advance" ${s.advance ? 'checked' : ''}></label>
+    <h2>בדיקת זיהוי הדיבור</h2>
+    <button id="test">🎤 אמרו משפט</button>
     <div class="heard" id="heard" style="margin-top:8px"></div>
-    <h2>Backup</h2>
-    <p class="muted small">As gravações ficam só neste celular${est ? ` (${(est.usage / 1e6).toFixed(0)} MB usados)` : ''}. Faça um backup de vez em quando.</p>
-    <div class="row"><button id="exp">⬇️ Exportar backup</button><button id="imp">⬆️ Importar backup</button>
+    <h2>גיבוי</h2>
+    <p class="muted small">ההקלטות שמורות רק בטלפון הזה${est ? ` (בשימוש ${(est.usage / 1e6).toFixed(0)} MB)` : ''}. כדאי לגבות מדי פעם.</p>
+    <div class="row"><button id="exp">⬇️ ייצוא גיבוי</button><button id="imp">⬆️ ייבוא גיבוי</button>
       <input type="file" id="impIn" accept=".json,application/json" hidden></div>
-    <p class="muted small" style="margin-top:24px">Texto: Sefaria (Torat Emet). Aulas: <a href="https://ecohen100-collab.github.io/mishna-yomit/" target="_blank" rel="noopener">משנה יומית</a>.</p>`;
+    <p class="muted small" style="margin-top:24px">נוסח המשנה: ספריא (תורת אמת). השיעורים: <a href="https://ecohen100-collab.github.io/mishna-yomit/" target="_blank" rel="noopener">משנה יומית</a>.</p>`;
   const save = async () => { await db.put('kv', 'settings', settings); };
   for (const k of ['repeats', 'threshold', 'attempts', 'lessonRate']) $('#' + k).onchange = e => { settings[k] = +e.target.value; L.setRate(settings.lessonRate); save(); };
   for (const k of ['shinun', 'parts', 'lesson', 'advance']) $('#' + k).onchange = e => { settings[k] = e.target.checked; save(); };
@@ -701,7 +701,7 @@ async function settingsView() {
     $('#heard').textContent = '…';
     try {
       const t = await listen({ onText: x => ($('#heard').textContent = x) });
-      $('#heard').textContent = t || '(não ouvi nada)';
+      $('#heard').textContent = t || '(לא שמעתי כלום)';
     } catch (e) { $('#heard').textContent = e.message; }
   };
   $('#exp').onclick = exportBackup;
@@ -712,7 +712,7 @@ async function settingsView() {
 const b64 = blob => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
 
 async function exportBackup() {
-  toast('Preparando backup…');
+  toast('מכין גיבוי…');
   const chapters = [];
   for (const [, c] of await db.entries('chapters')) chapters.push({ ...c, audio: await b64(c.audio) });
   const kv = Object.fromEntries((await db.entries('kv')).filter(([k]) => k !== 'lastUpload'));
@@ -727,17 +727,17 @@ async function exportBackup() {
 async function importBackup(file) {
   try {
     const data = JSON.parse(await file.text());
-    if (data.app !== 'mishna-carro') throw new Error('Este arquivo não é um backup do app');
-    if (!confirm(`Importar ${data.chapters.length} capítulo(s)? Capítulos com o mesmo nome serão substituídos.`)) return;
+    if (data.app !== 'mishna-carro') throw new Error('הקובץ הזה אינו גיבוי של האפליקציה');
+    if (!confirm(`לייבא ${data.chapters.length} פרקים? פרקים שכבר קיימים יוחלפו.`)) return;
     for (const c of data.chapters) {
       const audio = await (await fetch(c.audio)).blob();
       await db.put('chapters', c.key, { ...c, audio });
     }
     for (const [k, v] of Object.entries(data.kv || {})) await db.put('kv', k, v);
     settings = { ...DEFAULTS, ...((await db.get('kv', 'settings')) || {}) };
-    toast('Backup importado ✓');
+    toast('הגיבוי יובא ✓');
     route();
-  } catch (e) { toast('Erro: ' + e.message, 5000); }
+  } catch (e) { toast('שגיאה: ' + e.message, 5000); }
 }
 
 // ---------------- iniciar ----------------

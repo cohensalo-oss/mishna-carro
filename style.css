@@ -123,6 +123,9 @@ label.field > span { display: block; color: var(--muted); font-size: 14px; margi
 .car-controls { position: sticky; bottom: 12px; }
 .docked .car-controls { position: static; }
 .docked main { padding-bottom: 420px; }
+/* כפתורי מדיה וזמן נשארים משמאל לימין, כמו בכל נגן */
+.controls, .cut .nudge { direction: ltr; }
+.controls small { direction: rtl; }
 .controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 .controls button { min-height: 84px; font-size: 30px; border-radius: 20px; flex-direction: column; gap: 2px; }
 .controls button small { font-size: 13px; color: var(--muted); }

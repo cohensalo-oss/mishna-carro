@@ -1,8 +1,8 @@
-# Mishna no Carro
+# משנה בדרך
 
-App (PWA) para estudar Mishna no carro:
+אפליקציה (PWA) ללימוד משנה ברכב:
 
-1. **Gravar**: leia um perek; o app separa em mishnaiot (toque em "Próxima" ao gravar, ou envie um arquivo e ele acha as pausas).
-2. **Estudar no carro**: toca a sua leitura 3 vezes, faz o שינון (escuta você repetir e corrige) e toca a aula do [משנה יומית](https://ecohen100-collab.github.io/mishna-yomit/).
+1. **הקלטת פרק**: קוראים פרק, והאפליקציה מחלקת אותו למשניות (לוחצים "המשנה הבאה" בזמן ההקלטה, או מעלים קובץ והיא מוצאת את ההפסקות).
+2. **לימוד ברכב**: משמיעה את הקריאה שלך שלוש פעמים, עושה שינון (מקשיבה לחזרה שלך ומתקנת), ומשמיעה את השיעור של [משנה יומית](https://ecohen100-collab.github.io/mishna-yomit/).
 
-As gravações ficam só no celular (IndexedDB). Texto: Sefaria (Torat Emet).
+ההקלטות נשמרות רק בטלפון (IndexedDB), ולא נשלחות לשום מקום. נוסח המשנה: ספריא (תורת אמת).
