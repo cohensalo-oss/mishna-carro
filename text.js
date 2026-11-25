@@ -26,10 +26,14 @@ export function normWord(w) {
   return s;
 }
 
-// Divide a mishna em palavras para mostrar e comparar. end=true marca fim de frase.
+// Divide a mishna em palavras para mostrar e comparar.
+// end=true marca fim de trecho; brk = 2 depois de ponto (. : ?), 1 depois de vírgula, 0 no meio da frase.
 export function tokenize(text) {
   return text.replace(/־/g, '־ ').split(/\s+/).filter(Boolean)
-    .map(disp => ({ disp, norm: normWord(disp), end: /[.,:;?!׃]$/.test(disp) }))
+    .map(disp => {
+      const brk = /[.:?!׃]["'״׳)]*$/.test(disp) ? 2 : /[,;]["'״׳)]*$/.test(disp) ? 1 : 0;
+      return { disp, norm: normWord(disp), end: brk > 0, brk };
+    })
     .filter(t => t.norm);
 }
 

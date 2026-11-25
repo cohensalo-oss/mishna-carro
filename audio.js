@@ -99,11 +99,14 @@ export async function startRecorder() {
 }
 
 // ---------- divisão automática ----------
-// Encontra pausas (silêncio) na gravação.
-export function findGaps(buf) {
-  const hop = 0.02;
+const HOP = 0.02;
+const energyCache = new WeakMap();
+// Energia (dB) a cada 20 ms e o limiar entre fala e silêncio.
+function energy(buf) {
+  let r = energyCache.get(buf);
+  if (r) return r;
   const x = buf.getChannelData(0);
-  const step = Math.round(buf.sampleRate * hop);
+  const step = Math.round(buf.sampleRate * HOP);
   const n = Math.floor(x.length / step);
   const e = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -114,7 +117,15 @@ export function findGaps(buf) {
   const sorted = Array.from(e).sort((a, b) => a - b);
   const lo = sorted[Math.floor(n * 0.1)] ?? -100;
   const hi = sorted[Math.floor(n * 0.8)] ?? 0;
-  const thr = lo + 0.3 * (hi - lo);
+  r = { e, thr: lo + 0.3 * (hi - lo) };
+  energyCache.set(buf, r);
+  return r;
+}
+
+// Encontra pausas (silêncio) na gravação.
+export function findGaps(buf, minGap = 0.2) {
+  const { e, thr } = energy(buf);
+  const n = e.length;
   const gaps = [];
   let run = -1, vStart = -1, vEnd = 0;
   for (let i = 0; i <= n; i++) {
@@ -122,11 +133,104 @@ export function findGaps(buf) {
     if (i < n && !quiet) { if (vStart < 0) vStart = i; vEnd = i; }
     if (quiet && run < 0) run = i;
     if (!quiet && run >= 0) {
-      if ((i - run) * hop >= 0.2) gaps.push({ start: run * hop, end: i * hop });
+      if ((i - run) * HOP >= minGap) gaps.push({ start: run * HOP, end: i * HOP });
       run = -1;
     }
   }
-  return { gaps, vStart: Math.max(0, vStart) * hop, vEnd: (vEnd + 1) * hop };
+  return { gaps, vStart: Math.max(0, vStart) * HOP, vEnd: (vEnd + 1) * HOP };
+}
+
+// Onde a fala realmente começa e termina dentro de [a, b] (corta o silêncio das pontas).
+export function trimRange(buf, a, b, padIn = 0.25, padOut = 0.35) {
+  const { e, thr } = energy(buf);
+  const i0 = Math.max(0, Math.floor(a / HOP)), i1 = Math.min(e.length, Math.ceil(b / HOP));
+  const MIN = 4; // 80 ms seguidos de som contam como fala (um clique não conta)
+  let on = -1, off = -1, run = 0;
+  for (let i = i0; i < i1; i++) {
+    if (e[i] >= thr) { if (++run >= MIN) { on = i - MIN + 1; break; } } else run = 0;
+  }
+  run = 0;
+  for (let i = i1 - 1; i >= i0; i--) {
+    if (e[i] >= thr) { if (++run >= MIN) { off = i + MIN; break; } } else run = 0;
+  }
+  if (on < 0 || off <= on) return [a, b];
+  return [Math.max(a, on * HOP - padIn), Math.min(b, off * HOP + padOut)];
+}
+
+// Tempo de cada palavra dentro de seg=[a, b] (já sem silêncio nas pontas).
+// weights[i] = duração relativa da palavra i; brk[i] = 2 se a palavra i termina uma frase (ponto), 1 se vírgula, 0 se nada.
+// Devolve bounds (n+1): bounds[i] = { s, e } = fim da palavra i-1 e começo da palavra i (iguais quando não há pausa ali).
+// Cada pausa da gravação é casada com uma fronteira entre palavras (de preferência com pontuação), escolhendo
+// a combinação em que o ritmo de fala fica mais constante (programação dinâmica).
+export function wordBounds(buf, [a, b], weights, brk, opt = {}) {
+  const o = { minGap: 0.18, sigma: 1.1, r2: 2.5, r1: 2, r0: 2, skip2: 1.2, skip1: 0.2, skipGap: 4, ...opt };
+  const n = weights.length;
+  const gaps = findGaps(buf, o.minGap).gaps
+    .map(g => ({ start: Math.max(g.start, a), end: Math.min(g.end, b) }))
+    .filter(g => g.end - g.start >= o.minGap && g.start > a + 0.15 && g.end < b - 0.15);
+  const K = gaps.length;
+  // tempo "falado" (sem as pausas) até t, e o inverso
+  const voiced = t => { let v = t - a; for (const g of gaps) { if (g.end <= t) v -= g.end - g.start; else if (g.start < t) v -= t - g.start; } return v; };
+  const real = v => { let t = a + v; for (const g of gaps) { if (g.start < t) t += g.end - g.start; else break; } return t; };
+  const cum = [0];
+  for (let i = 0; i < n; i++) cum.push(cum[i] + weights[i]);
+  const V = voiced(b), rate = V / (cum[n] || 1);
+  // nós: 0 = início, 1..K = pausas, K+1 = fim
+  const vAt = [0, ...gaps.map(g => voiced(g.start)), V];
+  const gapCost = g => o.skipGap * Math.max(0, g.end - g.start - 0.08);
+  const skipG = [0];
+  for (let j = 1; j <= K; j++) skipG.push(skipG[j - 1] + gapCost(gaps[j - 1]));
+  // pc[x] = custo das fronteiras pontuadas 1..x-1 que ficarem sem pausa
+  const pc = [0, 0];
+  for (let x = 1; x < n; x++) pc.push(pc[x] + (brk[x - 1] === 2 ? o.skip2 : brk[x - 1] === 1 ? o.skip1 : 0));
+  const reward = x => (x >= n ? 0 : brk[x - 1] === 2 ? -o.r2 : brk[x - 1] === 1 ? -o.r1 : o.r0);
+  const INF = 1e9;
+  const best = Array.from({ length: K + 2 }, () => new Float64Array(n + 1).fill(INF));
+  const from = Array.from({ length: K + 2 }, () => new Int32Array(n + 1).fill(-1));
+  best[0][0] = 0;
+  for (let j = 1; j <= K + 1; j++) {
+    const xs = j === K + 1 ? [n] : Array.from({ length: n - 1 }, (_, k) => k + 1);
+    for (const x of xs) {
+      let bv = INF, bf = -1;
+      for (let jp = 0; jp < j; jp++) {
+        const D = vAt[j] - vAt[jp];
+        const skipped = skipG[j - 1] - skipG[jp];
+        for (let xp = jp === 0 ? 0 : 1; xp < x; xp++) {
+          const prev = best[jp][xp];
+          if (prev >= INF) continue;
+          if (jp === 0 && xp !== 0) continue;
+          const W = (cum[x] - cum[xp]) * rate;
+          const e = D - W;
+          const c = prev + (e * e) / (o.sigma * o.sigma * Math.max(W, 0.3)) + skipped + (pc[x] - pc[xp + 1]);
+          if (c < bv) { bv = c; bf = jp * (n + 1) + xp; }
+        }
+      }
+      if (bf >= 0) { best[j][x] = bv + reward(x); from[j][x] = bf; }
+    }
+  }
+  // volta pelo caminho: quais pausas ficaram com qual fronteira
+  const anchor = new Map(); // fronteira -> pausa
+  for (let j = K + 1, x = n; j > 0;) {
+    const f = from[j][x];
+    if (f < 0) break;
+    const jp = Math.floor(f / (n + 1)), xp = f % (n + 1);
+    if (jp > 0) anchor.set(xp, gaps[jp - 1]);
+    j = jp; x = xp;
+  }
+  const ks = [0, ...[...anchor.keys()].sort((p, q) => p - q), n];
+  const vk = k => (k === 0 ? 0 : k === n ? V : voiced(anchor.get(k).start));
+  const bounds = new Array(n + 1);
+  for (let s = 0; s + 1 < ks.length; s++) {
+    const lo = ks[s], hi = ks[s + 1], vlo = vk(lo), vhi = vk(hi);
+    for (let i = lo + 1; i < hi; i++) {
+      const t = real(vlo + ((cum[i] - cum[lo]) * (vhi - vlo)) / (cum[hi] - cum[lo] || 1));
+      bounds[i] = { s: t, e: t };
+    }
+  }
+  bounds[0] = { s: a, e: a };
+  bounds[n] = { s: b, e: b };
+  for (const [k, g] of anchor) bounds[k] = { s: g.start, e: g.end };
+  return bounds;
 }
 
 // weights: tamanho (letras) de cada mishna. Devolve n+1 cortes [0, ..., duração].

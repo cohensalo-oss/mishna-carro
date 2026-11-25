@@ -247,7 +247,7 @@ async function review(tid, ch, mode) {
         </div>`).join('')}
       <div class="spacer"></div>
       <button class="big primary" id="save">✓ שמירת הפרק</button>`;
-    $$('[data-play]').forEach(b => b.onclick = () => { const i = +b.dataset.play; play(cuts[i], cuts[i + 1]); });
+    $$('[data-play]').forEach(b => b.onclick = () => { const i = +b.dataset.play; play(...A.trimRange(buf, cuts[i], cuts[i + 1])); });
     $$('[data-head]').forEach(b => b.onclick = () => { const i = +b.dataset.head; play(cuts[i], cuts[i] + 3); });
     $$('[data-n]').forEach(b => b.onclick = () => {
       const i = +b.dataset.n;
@@ -297,8 +297,8 @@ async function chapter(tid, ch) {
     lessons = await Promise.all(rec.cuts.slice(0, -1).map(async (_, i) => {
       const l = await L.lessonOf(tr, ch, i + 1);
       if (!l) return null;
-      const marks = await L.getMarks(l.id);
-      return { ...l, exact: marks[ch + ':' + (i + 1)] != null };
+      const { merged } = await L.allMarks(l.id);
+      return { ...l, exact: merged[ch + ':' + (i + 1)] != null };
     }));
   } catch (e) { lessonErr = e.message; }
   const lessonInfo = i => { const l = lessons[i]; return l ? `שיעור ${l.n}${l.exact ? ' ✓' : ''}` : ''; };
@@ -364,7 +364,7 @@ async function car(tid, ch, m) {
   const paint = (range, okArr) => {
     textEl.innerHTML = tokens.map((t, i) => {
       let c = 'w';
-      if (okArr) c += okArr[i] === undefined ? ' dim' : okArr[i] ? ' ok' : ' miss';
+      if (okArr) c += okArr[i] == null ? ' dim' : okArr[i] ? ' ok' : ' miss';
       else if (range && (i < range[0] || i >= range[1])) c += ' dim';
       else if (range) c += ' cur';
       return `<span class="${c}">${esc(t.disp)}</span>`;
@@ -402,20 +402,19 @@ async function car(tid, ch, m) {
     return true;
   }
 
-  // segundos de cada palavra dentro da gravação (proporcional ao tamanho)
-  const wordTime = (seg, w) => {
-    const [a, b] = seg;
-    let total = 0, upto = 0;
-    tokens.forEach((t, i) => { const l = t.norm.length + 1; if (i < w) upto += l; total += l; });
-    return a + ((b - a) * upto) / total;
-  };
-  const playWords = (seg, w0, w1, signal) =>
-    A.playRange(buf, Math.max(seg[0], wordTime(seg, w0) - 0.35), Math.min(seg[1], wordTime(seg, w1) + 0.35), signal);
+  // tempo de cada palavra na gravação: bounds[i] = {s: fim da palavra i-1, e: começo da palavra i},
+  // alinhado com as pausas da leitura (A.wordBounds)
+  let bounds = [];
+  const wordFrom = (seg, w) => (w <= 0 ? seg[0] : Math.max(seg[0], bounds[w].e - 0.12));
+  const wordTo = (seg, w) => (w >= tokens.length ? seg[1] : Math.min(seg[1], bounds[w].s + 0.2));
+  const playWords = (seg, w0, w1, signal) => A.playRange(buf, wordFrom(seg, w0), wordTo(seg, w1), signal);
 
   // ---- uma unidade de שינון (parte ou mishna inteira) ----
   async function drill(seg, [w0, w1], label, playFirst) {
     const unitTokens = tokens.slice(w0, w1);
-    const unitDur = wordTime(seg, w1) - wordTime(seg, w0);
+    const unitDur = wordTo(seg, w1) - wordFrom(seg, w0);
+    // nas pontas internas de uma parte o corte do áudio é estimado: tolera uma palavra a menos ali
+    const soft = { softStart: w0 > 0 ? 1 : 0, softEnd: w1 < tokens.length ? 1 : 0 };
     for (let attempt = 1; attempt <= settings.attempts; attempt++) {
       await waitIfPaused();
       if (sessionOver || skipTo) return;
@@ -443,7 +442,7 @@ async function car(tid, ch, m) {
         if (signal.reason === 'pause') { attempt--; continue; }
         return;
       }
-      const res = compare(unitTokens, heard);
+      const res = compare(unitTokens, heard, soft);
       const okArr = new Array(tokens.length);
       res.ok.forEach((v, i) => (okArr[w0 + i] = v));
       paint(null, okArr);
@@ -484,8 +483,8 @@ async function car(tid, ch, m) {
     if (!lesson) return null;
     const dur = await L.load(lesson.url);
     const weights = await Promise.all(lesson.members.map(async ([x, y]) => letters((await chapterText(tr, x))[y - 1] || '') || 1));
-    const marks = await L.getMarks(lesson.id);
-    return { lesson, marks, dur, ...L.segmentTimes(lesson, marks, weights, dur) };
+    const { user: marks, merged } = await L.allMarks(lesson.id);
+    return { lesson, marks, dur, ...L.segmentTimes(lesson, merged, weights, dur), userMark: marks[lesson.members[lesson.index].join(':')] != null };
   }
 
   async function lessonStage(from = null) {
@@ -523,8 +522,10 @@ async function car(tid, ch, m) {
   }
 
   async function runMishna() {
-    const seg = [chap.cuts[pos.m - 1], chap.cuts[pos.m]];
+    // sem o silêncio do começo e do fim
+    const seg = A.trimRange(buf, chap.cuts[pos.m - 1], chap.cuts[pos.m]);
     tokens = tokenize(text[pos.m - 1]);
+    bounds = A.wordBounds(buf, seg, tokens.map(t => t.norm.length + 1), tokens.map(t => t.brk));
     $('#ttl').textContent = title(tr, pos.ch, pos.m);
     prog.style.width = (100 * pos.m / text.length) + '%';
     heardEl.textContent = '';
@@ -543,7 +544,8 @@ async function car(tid, ch, m) {
     }
     // 2) שינון
     if (settings.shinun && speechSupported) {
-      const parts = settings.parts && tokens.length > 22 ? splitParts(tokens) : [];
+      let parts = settings.parts && tokens.length > 22 ? splitParts(tokens) : [];
+      if (parts.length < 2) parts = [];
       for (let k = 0; k < parts.length; k++) {
         await drill(seg, parts[k], `חלק ${k + 1} מתוך ${parts.length}`, true);
         if (sessionOver || skipTo) return;
@@ -602,7 +604,7 @@ async function car(tid, ch, m) {
       dockExtra.innerHTML = `<div class="card" style="margin:0">
         <div class="row"><b class="grow">שיעור ${s.lesson.n} · ${esc(title(tr, pos.ch, pos.m))}</b><button class="ghost" id="cClose">✕</button></div>
         <p class="small muted">השיעור עוסק ב־${s.lesson.members.map(([c, i]) => esc(title(tr, c, i))).join(', ')}.
-          המשנה הזאת מתחילה ב־<bdi>${fmt(s.start)}</bdi>${s.exact ? ' (סומן ✓)' : ' (משוער)'}. הקשיבו ולחצו 📍 כשהרב מתחיל את המשנה הזאת.</p>
+          המשנה הזאת מתחילה ב־<bdi>${fmt(s.start)}</bdi>${s.userMark ? ' (סימנת ✓)' : s.exact ? ' (לפי "משנה…" של הרב ✓)' : ' (משוער)'}. הקשיבו ולחצו 📍 כשהרב מתחיל את המשנה הזאת.</p>
         <div class="row"><span class="timer" id="cPos" dir="ltr">${fmt(au.currentTime)} / ${fmt(s.dur)}</span></div>
         <div class="controls" style="margin:8px 0">
           <button id="cBack">−10<small>שניות</small></button>
@@ -611,7 +613,7 @@ async function car(tid, ch, m) {
         </div>
         <div class="row">
           <button class="primary grow" id="cMark">📍 המשנה מתחילה עכשיו</button>
-          ${s.exact ? '<button class="ghost" id="cUnmark">ביטול הסימון</button>' : ''}
+          ${s.userMark ? '<button class="ghost" id="cUnmark">ביטול הסימון שלי</button>' : ''}
         </div></div>`;
       const q = sel => dockExtra.querySelector(sel);
       q('#cClose').onclick = close;
@@ -628,7 +630,7 @@ async function car(tid, ch, m) {
         s.marks[s.key] = au.currentTime;
         await L.setMarks(s.lesson.id, s.marks);
         s.start = au.currentTime;
-        s.exact = true;
+        s.exact = s.userMark = true;
         toast(`סומן ב־${fmt(au.currentTime)} ✓`);
         draw();
       };

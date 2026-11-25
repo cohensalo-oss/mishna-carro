@@ -86,7 +86,7 @@ function lev(a, b) {
 const sim = (a, b) => 1 - lev(a, b) / Math.max(a.length, b.length, 1);
 
 // Alinha as palavras esperadas (ref) com as ouvidas. Devolve quais palavras do texto foram ditas.
-export function compare(refTokens, heardText) {
+export function compare(refTokens, heardText, { softStart = 0, softEnd = 0 } = {}) {
   const ref = refTokens.map(t => t.norm);
   const hyp = heardText.split(/\s+/).map(normWord).filter(Boolean);
   const n = ref.length, m = hyp.length;
@@ -126,14 +126,17 @@ export function compare(refTokens, heardText) {
     else if (b === 3) { ok[i - 1] = ok[i - 2] = true; i -= 2; j--; }
     else { ok[i - 1] = true; i--; j -= 2; }
   }
+  // pontas "macias" de uma parte: o corte do áudio ali é estimado, então palavra faltando ali não conta (fica null)
+  for (let k = 0; k < n; k++) if (!ok[k] && (k < softStart || k >= n - softEnd)) ok[k] = null;
   const hits = ok.filter(Boolean).length;
+  const counted = ok.filter(v => v !== null).length;
   // erros que importam: trecho pulado (3+ palavras seguidas) ou nome/decisão trocados
   let run = 0, bigRun = -1;
-  ok.forEach((v, k) => { run = v ? 0 : run + 1; if (run === 3 && bigRun < 0) bigRun = k - 2; });
-  const critical = ok.findIndex((v, k) => !v && isCritical(ref, k));
+  ok.forEach((v, k) => { run = v !== false ? 0 : run + 1; if (run === 3 && bigRun < 0) bigRun = k - 2; });
+  const critical = ok.findIndex((v, k) => v === false && isCritical(ref, k));
   const serious = [bigRun, critical].filter(x => x >= 0);
   return {
-    ok, score: n ? hits / n : 1,
+    ok, score: counted ? hits / counted : 1,
     firstMiss: serious.length ? Math.min(...serious) : ok.indexOf(false),
     serious: serious.length > 0,
   };
@@ -148,22 +151,38 @@ function isCritical(ref, k) {
   return RULINGS.includes(ref[k]);
 }
 
-// Divide as palavras de uma mishna em partes de ~maxWords, respeitando fim de frase.
-export function splitParts(tokens, maxWords = 14) {
-  const phrases = [];
-  let cur = [];
-  tokens.forEach((t, i) => {
-    cur.push(i);
-    if (t.end || i === tokens.length - 1) { phrases.push(cur); cur = []; }
-  });
-  const parts = [];
-  let part = [];
-  for (const ph of phrases) {
-    if (part.length && part.length + ph.length > maxWords) { parts.push(part); part = []; }
-    part.push(...ph);
+// Divide uma mishna em partes. Só corta em fim de frase (ponto / dois-pontos);
+// frases curtas seguidas ficam juntas (até maxWords). Só uma frase muito longa (> longWords) é cortada na vírgula.
+export function splitParts(tokens, maxWords = 16, longWords = 30) {
+  const cut = (from, to, level) => { // [from,to) em trechos que terminam em brk >= level
+    const out = [];
+    let s = from;
+    for (let i = from; i < to; i++) if (tokens[i].brk >= level || i === to - 1) { out.push([s, i + 1]); s = i + 1; }
+    return out;
+  };
+  const len = ([a, b]) => b - a;
+  const sentences = [];
+  for (const s of cut(0, tokens.length, 2)) {
+    if (len(s) <= longWords) { sentences.push(s); continue; }
+    // frase longa demais: junta os trechos entre vírgulas em blocos de ~maxWords
+    let cur = null;
+    for (const c of cut(s[0], s[1], 1)) {
+      if (cur && len(cur) + len(c) > maxWords && len(cur) >= 6) { sentences.push(cur); cur = null; }
+      cur = cur ? [cur[0], c[1]] : c;
+    }
+    if (cur) {
+      const last = sentences[sentences.length - 1];
+      if (len(cur) < 6 && last && last[1] === cur[0] && last[0] >= s[0]) last[1] = cur[1]; else sentences.push(cur);
+    }
   }
-  if (part.length) parts.push(part);
-  return parts.map(p => [p[0], p[p.length - 1] + 1]); // [início, fim) em índices de palavra
+  const parts = [];
+  for (const s of sentences) {
+    const p = parts[parts.length - 1];
+    if (p && len(p) + len(s) <= maxWords) p[1] = s[1]; else parts.push(s.slice());
+  }
+  // uma última parte minúscula vai junto com a anterior
+  if (parts.length > 1 && len(parts[parts.length - 1]) < 4) { const x = parts.pop(); parts[parts.length - 1][1] = x[1]; }
+  return parts; // [início, fim) em índices de palavra
 }
 
 // Trecho (frase) que contém a palavra w: [início, fim)

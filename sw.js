@@ -1,7 +1,7 @@
 // שומר את האפליקציה כדי שתיפתח גם בלי אינטרנט. כשיש אינטרנט תמיד בודקים אם יש גרסה חדשה.
-const CACHE = 'mishna-carro-v4';
+const CACHE = 'mishna-carro-v5';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'db.js', 'text.js', 'audio.js', 'shinun.js', 'lesson.js', 'data.js',
-  'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+  'lessons.json', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   // cache: 'reload' = לא לקחת עותק ישן מהמטמון של הדפדפן

@@ -83,6 +83,20 @@ export async function lessonOf(tr, c, i) {
 export const getMarks = async id => (await db.get('kv', 'marks:' + id)) || {};
 export const setMarks = (id, marks) => db.put('kv', 'marks:' + id, marks);
 
+// Marcações automáticas: onde o rabino anuncia "משנה ב'", "משנה ג'"... (lessons.json, gerado por tools/lesson_marks.py)
+let autoP = null;
+export async function autoMarks(id) {
+  autoP ||= fetch('lessons.json').then(r => (r.ok ? r.json() : {})).catch(() => { autoP = null; return {}; });
+  const m = { ...((await autoP)[id] || {}) };
+  delete m._;
+  return m;
+}
+// marcações do usuário valem mais que as automáticas
+export async function allMarks(id) {
+  const [auto, user] = await Promise.all([autoMarks(id), getMarks(id)]);
+  return { user, merged: { ...auto, ...user } };
+}
+
 // Início/fim estimados da mishna na aula: marcações do usuário, senão proporcional ao tamanho do texto.
 export function segmentTimes(lesson, marks, weights, dur) {
   const k = lesson.members.map(([c, i]) => c + ':' + i);
