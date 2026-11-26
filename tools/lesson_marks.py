@@ -91,6 +91,7 @@ def main():
     ap.add_argument('--cache', default=os.path.join(ROOT, '..', 'lesson-audio'))
     ap.add_argument('--model', default='ivrit-ai/whisper-large-v3-turbo-ct2')
     ap.add_argument('--redo', action='store_true')
+    ap.add_argument('--missing', action='store_true', help='redo lessons where some mishna was not found')
     args = ap.parse_args()
 
     tractates, key = site()
@@ -99,7 +100,8 @@ def main():
         if not tractates:
             sys.exit('masechet not found')
     data = json.load(open(OUT, encoding='utf-8')) if os.path.exists(OUT) else {}
-    todo = [(m, l) for m in tractates for l in lessons_of(m) if args.redo or l[1] not in data]
+    todo = [(m, l) for m in tractates for l in lessons_of(m)
+            if args.redo or l[1] not in data or (args.missing and data[l[1]].get('_', 0) < len(l[2]))]
     if args.limit:
         todo = todo[:args.limit]
     print(f'{len(todo)} lessons to do', flush=True)
@@ -117,7 +119,12 @@ def main():
                 os.replace(f + '.part', f)
             segs, info = model.transcribe(f, language='he', beam_size=1, vad_filter=True,
                                           condition_on_previous_text=False)
-            marks = find_marks(((s.start, s.end, s.text) for s in segs), members)
+            seen = []
+            def keep(it):
+                for s in it:
+                    if re.search(r'משנ|פרק', s.text): seen.append(f'{s.start:.0f}: {s.text.strip()}')
+                    yield s.start, s.end, s.text
+            marks = find_marks(keep(segs), members)
         except Exception as e:
             print(f'{m["n"]} {n}: error {e}', flush=True)
             continue
@@ -129,6 +136,8 @@ def main():
         except OSError:
             pass
         print(f'{m["n"]} lesson {n}: {marks["_"]}/{len(members)} {marks}  ({time.time() - t0:.0f}s)', flush=True)
+        if marks['_'] < len(members):
+            print('   not found; mentions:', ' | '.join(seen), flush=True)
 
 if __name__ == '__main__':
     main()
