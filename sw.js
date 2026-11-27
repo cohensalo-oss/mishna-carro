@@ -1,5 +1,5 @@
 // שומר את האפליקציה כדי שתיפתח גם בלי אינטרנט. כשיש אינטרנט תמיד בודקים אם יש גרסה חדשה.
-const CACHE = 'mishna-carro-v5';
+const CACHE = 'mishna-carro-v6';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'db.js', 'text.js', 'audio.js', 'shinun.js', 'lesson.js', 'data.js',
   'lessons.json', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 

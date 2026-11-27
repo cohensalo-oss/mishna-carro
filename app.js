@@ -10,7 +10,7 @@ const dock = document.getElementById('dock');
 const dockExtra = document.getElementById('dock-extra');
 const byId = Object.fromEntries(TRACTATES.map(t => [t.id, t]));
 
-const DEFAULTS = { repeats: 3, shinun: true, parts: true, threshold: 80, attempts: 4, lesson: true, lessonRate: 1, advance: true };
+const DEFAULTS = { repeats: 3, shinun: true, parts: true, partMax: 16, threshold: 80, attempts: 4, lesson: true, lessonRate: 1, advance: true };
 let settings = { ...DEFAULTS };
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -351,6 +351,10 @@ async function car(tid, ch, m) {
     <div class="stage" id="stage">…</div>
     <div class="mtext" id="mtext"></div>
     <div class="heard" id="heard"></div>
+    <div class="controls seek" id="seek" style="display:none">
+      <button id="bBack15">−15<small>שניות אחורה</small></button>
+      <button id="bFwd15">+15<small>שניות קדימה</small></button>
+    </div>
     <div class="controls car-controls">
       <button id="bPrev">⏮<small>משנה קודמת</small></button>
       <button id="bPause">⏸<small>השהיה</small></button>
@@ -386,6 +390,11 @@ async function car(tid, ch, m) {
   $('#bNext').onclick = () => { skipTo = 'next'; if (paused) setPaused(false); stageCtl?.abort('jump'); };
   $('#bPrev').onclick = () => { skipTo = 'prev'; if (paused) setPaused(false); stageCtl?.abort('jump'); };
   $('#adj').onclick = () => openCalibration();
+  // ±15 s no שיעור (só aparecem enquanto o שיעור toca)
+  const showSeek = on => { $('#seek').style.display = on ? '' : 'none'; };
+  const seek = d => { const au = L.audio; au.currentTime = Math.max(0, Math.min((au.duration || 0) - 0.5, au.currentTime + d)); };
+  $('#bBack15').onclick = () => seek(-15);
+  $('#bFwd15').onclick = () => seek(15);
 
   onLeave(async () => { sessionOver = true; stageCtl?.abort('exit'); resumeWait?.(); L.pause(); A.ac().resume(); await wake(false); });
   A.ac();
@@ -409,12 +418,39 @@ async function car(tid, ch, m) {
   const wordTo = (seg, w) => (w >= tokens.length ? seg[1] : Math.min(seg[1], bounds[w].s + 0.2));
   const playWords = (seg, w0, w1, signal) => A.playRange(buf, wordFrom(seg, w0), wordTo(seg, w1), signal);
 
+  // nas pontas internas de uma parte o corte do áudio é estimado: tolera uma palavra a menos ali
+  const softOf = (a, b) => ({ softStart: a > 0 ? 1 : 0, softEnd: b < tokens.length ? 1 : 0 });
+  const passes = r => Math.round(r.score * 100) >= settings.threshold && !r.serious;
+
+  // Avalia a repetição do trecho [w0,w1). O usuário pode ter continuado além do trecho:
+  // alinha com o resto da mishna e vê até onde as palavras continuam batendo.
+  // Devolve { res, end }: end = até onde ele chegou (índice de palavra, exclusivo).
+  function judge(w0, w1, heard) {
+    const n = tokens.length;
+    const part = compare(tokens.slice(w0, w1), heard, softOf(w0, w1));
+    if (w1 < n) {
+      const all = compare(tokens.slice(w0), heard, { freeEnd: true });
+      let reach = -1, hits = 0;
+      for (let k = w1 - w0; k < all.ok.length; k++) {
+        if (!all.ok[k]) continue;
+        hits++;
+        // pelo menos 2 palavras certas depois do trecho, e a maioria das palavras até ali
+        if (hits >= 2 && hits >= 0.6 * (k - (w1 - w0) + 1)) reach = k;
+      }
+      if (reach >= 0) {
+        const end = w0 + reach + 1;
+        const ext = compare(tokens.slice(w0, end), heard, softOf(w0, end));
+        if (passes(ext) || !passes(part)) return { res: ext, end };
+      }
+    }
+    return { res: part, end: w1 };
+  }
+
   // ---- uma unidade de שינון (parte ou mishna inteira) ----
+  // Devolve até onde o usuário chegou se passou (pode ser além de w1), ou null se não passou.
   async function drill(seg, [w0, w1], label, playFirst) {
-    const unitTokens = tokens.slice(w0, w1);
-    const unitDur = wordTo(seg, w1) - wordFrom(seg, w0);
-    // nas pontas internas de uma parte o corte do áudio é estimado: tolera uma palavra a menos ali
-    const soft = { softStart: w0 > 0 ? 1 : 0, softEnd: w1 < tokens.length ? 1 : 0 };
+    const n = tokens.length;
+    const restDur = wordTo(seg, n) - wordFrom(seg, w0);
     for (let attempt = 1; attempt <= settings.attempts; attempt++) {
       await waitIfPaused();
       if (sessionOver || skipTo) return;
@@ -432,7 +468,7 @@ async function car(tid, ch, m) {
       await A.cue('turn');
       let heard = '';
       try {
-        heard = await listen({ maxMs: unitDur * 1800 + 6000, signal, onText: t => (heardEl.textContent = t) });
+        heard = await listen({ maxMs: restDur * 1800 + 6000, signal, onText: t => (heardEl.textContent = t) });
       } catch (e) {
         toast(e.message, 5000);
         settings.shinun = false;
@@ -442,29 +478,31 @@ async function car(tid, ch, m) {
         if (signal.reason === 'pause') { attempt--; continue; }
         return;
       }
-      const res = compare(unitTokens, heard, soft);
-      const okArr = new Array(tokens.length);
-      res.ok.forEach((v, i) => (okArr[w0 + i] = v));
-      paint(null, okArr);
-      const pct = Math.round(res.score * 100);
       if (!heard) {
         setStage('wrong', 'לא שמעתי כלום. עוד פעם.');
         await A.cue('bad');
         continue;
       }
-      if (pct >= settings.threshold && !res.serious) {
-        setStage('good', `יפה מאוד! ${pct}%`);
+      const { res, end } = judge(w0, w1, heard);
+      const okArr = new Array(n);
+      res.ok.forEach((v, i) => (okArr[w0 + i] = v));
+      paint(null, okArr);
+      const pct = Math.round(res.score * 100);
+      if (passes(res)) {
+        const more = end > w1 ? ` · המשכתם עד ${end >= n ? 'סוף המשנה' : `"${tokens[end - 1].disp}"`}` : '';
+        setStage('good', `יפה מאוד! ${pct}%${more}`);
         await A.cue('ok');
-        await A.sleep(900, signal);
-        return true;
+        await A.sleep(end > w1 ? 1500 : 900, signal);
+        return end;
       }
       setStage('wrong', `${pct}%${res.serious ? ' · חסר או הוחלף משהו חשוב' : ''}. הקשיבו לתיקון`);
       await A.cue('bad');
       const miss = w0 + Math.max(0, res.firstMiss);
       const [p0, p1] = phraseAround(tokens, miss);
+      const c1 = Math.min(end, Math.max(p1, miss + 4));
       signal = newStage();
-      paint([p0, Math.min(w1, Math.max(p1, miss + 4))]);
-      await playWords(seg, Math.max(w0, p0), Math.min(w1, Math.max(p1, miss + 4)), signal);
+      paint([Math.max(w0, p0), c1]);
+      await playWords(seg, Math.max(w0, p0), c1, signal);
       if (signal.aborted && signal.reason !== 'pause') return;
       await A.sleep(500, signal);
     }
@@ -474,7 +512,7 @@ async function car(tid, ch, m) {
     setStage('listen', `עוד פעם: ${label}`);
     paint([w0, w1]);
     await playWords(seg, w0, w1, signal);
-    return false;
+    return null;
   }
 
   // onde a aula desta mishna começa e termina
@@ -506,6 +544,7 @@ async function car(tid, ch, m) {
     const label = `שיעור ${s.lesson.n}${s.lesson.members.length > 1 ? ` · משנה ${s.lesson.index + 1} מתוך ${s.lesson.members.length}` : ''}${s.exact ? '' : ' (התחלה משוערת)'}`;
     setStage('lesson', label);
     paint(null);
+    showSeek(true);
     await L.playSegment(s.lesson.url, from ?? s.start, s.end, {
       signal,
       onBlocked: () => {
@@ -529,6 +568,7 @@ async function car(tid, ch, m) {
     $('#ttl').textContent = title(tr, pos.ch, pos.m);
     prog.style.width = (100 * pos.m / text.length) + '%';
     heardEl.textContent = '';
+    showSeek(false);
     updateMediaSession();
     paint(null);
     // 1) ouvir a própria leitura N vezes
@@ -544,20 +584,31 @@ async function car(tid, ch, m) {
     }
     // 2) שינון
     if (settings.shinun && speechSupported) {
-      let parts = settings.parts && tokens.length > 22 ? splitParts(tokens) : [];
-      if (parts.length < 2) parts = [];
-      for (let k = 0; k < parts.length; k++) {
-        await drill(seg, parts[k], `חלק ${k + 1} מתוך ${parts.length}`, true);
+      const n = tokens.length, max = settings.partMax;
+      // os trechos a partir da palavra a (refeito depois de cada trecho, porque o usuário pode ter ido além)
+      const planFrom = a => splitParts(tokens.slice(a), max).map(([x, y]) => [x + a, y + a]);
+      let whole = true;
+      if (settings.parts && n > Math.round(max * 1.4) && planFrom(0).length >= 2) {
+        for (let start = 0, k = 1; start < n && settings.shinun; k++) {
+          const plan = planFrom(start);
+          const end = await drill(seg, plan[0], `חלק ${k} מתוך ${k - 1 + plan.length}`, true);
+          if (sessionOver || skipTo) return;
+          // leu a mishna inteira de uma vez, do começo ao fim: não precisa repetir tudo de novo
+          if (start === 0 && end >= n) whole = false;
+          start = end ?? plan[0][1];
+        }
+      }
+      if (whole && settings.shinun) {
+        await drill(seg, [0, n], 'המשנה כולה', false);
         if (sessionOver || skipTo) return;
       }
-      await drill(seg, [0, tokens.length], 'המשנה כולה', false);
-      if (sessionOver || skipTo) return;
     }
     // 3) aula
     if (settings.lesson) {
       await waitIfPaused();
       if (sessionOver || skipTo) return;
       await lessonStage();
+      showSeek(false);
     }
   }
 
@@ -680,6 +731,8 @@ async function settingsView() {
       <select id="repeats">${[1, 2, 3, 4, 5].map(n => `<option ${n === s.repeats ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
     <label class="switch"><span>שינון בעל פה<small>האפליקציה מקשיבה לחזרה שלך ומתקנת</small></span><input type="checkbox" id="shinun" ${s.shinun ? 'checked' : ''}></label>
     <label class="switch"><span>שינון בחלקים<small>במשנה ארוכה: קודם כל קטע, ואחר כך הכול</small></span><input type="checkbox" id="parts" ${s.parts ? 'checked' : ''}></label>
+    <label class="field"><span>אורך מרבי של קטע בשינון (מילים). הקטעים נגמרים בסוף משפט, לכן רובם קצרים יותר</span>
+      <select id="partMax">${[8, 10, 12, 16, 20, 25, 30, 40].map(n => `<option ${n === s.partMax ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
     <label class="field"><span>אחוז הצלחה מינימלי למעבר</span>
       <select id="threshold">${[50, 60, 70, 75, 80, 85, 90].map(n => `<option ${n === s.threshold ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
     <label class="field"><span>מספר ניסיונות בשינון</span>
@@ -697,7 +750,7 @@ async function settingsView() {
       <input type="file" id="impIn" accept=".json,application/json" hidden></div>
     <p class="muted small" style="margin-top:24px">נוסח המשנה: ספריא (תורת אמת). השיעורים: <a href="https://ecohen100-collab.github.io/mishna-yomit/" target="_blank" rel="noopener">משנה יומית</a>.</p>`;
   const save = async () => { await db.put('kv', 'settings', settings); };
-  for (const k of ['repeats', 'threshold', 'attempts', 'lessonRate']) $('#' + k).onchange = e => { settings[k] = +e.target.value; L.setRate(settings.lessonRate); save(); };
+  for (const k of ['repeats', 'partMax', 'threshold', 'attempts', 'lessonRate']) $('#' + k).onchange = e => { settings[k] = +e.target.value; L.setRate(settings.lessonRate); save(); };
   for (const k of ['shinun', 'parts', 'lesson', 'advance']) $('#' + k).onchange = e => { settings[k] = e.target.checked; save(); };
   $('#test').onclick = async () => {
     $('#heard').textContent = '…';

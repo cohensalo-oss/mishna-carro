@@ -86,7 +86,9 @@ function lev(a, b) {
 const sim = (a, b) => 1 - lev(a, b) / Math.max(a.length, b.length, 1);
 
 // Alinha as palavras esperadas (ref) com as ouvidas. Devolve quais palavras do texto foram ditas.
-export function compare(refTokens, heardText, { softStart = 0, softEnd = 0 } = {}) {
+// freeEnd: o usuário pode ter parado antes do fim de ref; o resto não lido não custa nada
+// (assim o alinhamento não puxa as últimas palavras para uma repetição igual mais adiante).
+export function compare(refTokens, heardText, { softStart = 0, softEnd = 0, freeEnd = false } = {}) {
   const ref = refTokens.map(t => t.norm);
   const hyp = heardText.split(/\s+/).map(normWord).filter(Boolean);
   const n = ref.length, m = hyp.length;
@@ -118,6 +120,7 @@ export function compare(refTokens, heardText, { softStart = 0, softEnd = 0 } = {
   }
   const ok = new Array(n).fill(false);
   let i = n, j = m;
+  if (freeEnd) for (let k = n - 1; k >= 0; k--) if (D[k][m] < D[i][m]) i = k;
   while (i > 0 || j > 0) {
     const b = i > 0 && j > 0 ? B[i][j] : i > 0 ? 1 : 2;
     if (b === 0) { ok[i - 1] = S[i - 1][j - 1] >= 0.6; i--; j--; }
@@ -152,8 +155,9 @@ function isCritical(ref, k) {
 }
 
 // Divide uma mishna em partes. Só corta em fim de frase (ponto / dois-pontos);
-// frases curtas seguidas ficam juntas (até maxWords). Só uma frase muito longa (> longWords) é cortada na vírgula.
-export function splitParts(tokens, maxWords = 16, longWords = 30) {
+// frases curtas seguidas ficam juntas (até maxWords). Só uma frase bem mais longa que o máximo
+// (> longWords, ~25% a mais) é cortada na vírgula.
+export function splitParts(tokens, maxWords = 16, longWords = Math.round(maxWords * 1.25)) {
   const cut = (from, to, level) => { // [from,to) em trechos que terminam em brk >= level
     const out = [];
     let s = from;
